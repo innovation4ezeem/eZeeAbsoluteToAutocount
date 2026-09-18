@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger Bridge</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#eef1f0;
+    --surface:#ffffff;
+    --surface-2:#e4e9e7;
+    --border:#c9d1cd;
+    --ink:#16233b;
+    --ink-dim:#57677a;
+    --accent:#a8791f;
+    --accent-ink:#4a3413;
+    --accent-soft:#f2e6c9;
+    --good:#2f7d5c;
+    --good-bg:#e2f0e9;
+    --warn:#9c5c17;
+    --warn-bg:#f5e8d3;
+    --bad:#a8402c;
+    --bad-bg:#f6e0da;
+    --focus:#1b2a4a;
+    --font-display:'Newsreader',Georgia,'Times New Roman',serif;
+    --font-body:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1621;
+      --surface:#182131;
+      --surface-2:#202b3e;
+      --border:#31415a;
+      --ink:#e8ecf4;
+      --ink-dim:#a3b1c4;
+      --accent:#d8a94a;
+      --accent-ink:#2c1e08;
+      --accent-soft:#3a2f14;
+      --good:#5fcda2;
+      --good-bg:#123227;
+      --warn:#e0ac5c;
+      --warn-bg:#3a2a10;
+      --bad:#e28d78;
+      --bad-bg:#3b1d16;
+      --focus:#9db8e3;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    padding-inline:20px;
+    padding-block:28px 60px;
+  }
+  main{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:22px;}
+
+  header h1{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:clamp(1.7rem,4vw,2.3rem);
+    margin:0 0 6px;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--ink-dim);
+    font-size:0.95rem;
+    max-width:62ch;
+    line-height:1.5;
+  }
+  .privacy{
+    margin-top:10px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:0.78rem;
+    color:var(--good);
+    background:var(--good-bg);
+    padding:5px 10px;
+    border-radius:99px;
+    font-weight:500;
+  }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:20px 22px;
+  }
+  .card + .card{margin-top:0;}
+  .card h2{
+    font-family:var(--font-display);
+    font-size:1.15rem;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  .card .hint{color:var(--ink-dim);font-size:0.85rem;margin:0 0 16px;line-height:1.5;}
+
+  .step-label{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:22px;height:22px;
+    border-radius:50%;
+    background:var(--accent-soft);
+    color:var(--accent-ink);
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    font-weight:500;
+    margin-right:8px;
+  }
+
+  .upload-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  @media (max-width:600px){ .upload-grid{grid-template-columns:1fr;} }
+
+  .dropzone{
+    border:1.5px dashed var(--border);
+    border-radius:10px;
+    padding:16px;
+    background:var(--surface-2);
+    transition:border-color .15s ease;
+  }
+  .dropzone.has-file{border-color:var(--good);}
+  .dropzone label.title{
+    display:block;
+    font-weight:600;
+    font-size:0.88rem;
+    margin-bottom:2px;
+  }
+  .dropzone .file-hint{font-size:0.78rem;color:var(--ink-dim);margin-bottom:10px;}
+  .dropzone input[type=file]{
+    font-family:var(--font-body);
+    font-size:0.82rem;
+    width:100%;
+    color:var(--ink);
+  }
+  .file-status{
+    margin-top:8px;
+    font-size:0.78rem;
+    font-family:var(--font-mono);
+    color:var(--ink-dim);
+  }
+  .file-status.ok{color:var(--good);}
+
+  .settings-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+  }
+  @media (max-width:640px){ .settings-row{grid-template-columns:1fr 1fr;} }
+  .field label{
+    display:block;
+    font-size:0.78rem;
+    font-weight:600;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin-bottom:5px;
+  }
+  .field input{
+    width:100%;
+    font-family:var(--font-mono);
+    font-size:0.88rem;
+    padding:8px 10px;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+  }
+  .field input:focus{outline:2px solid var(--focus);outline-offset:1px;}
+  .field .note{font-size:0.72rem;color:var(--ink-dim);margin-top:4px;}
+
+  button.primary{
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:0.92rem;
+    background:var(--focus);
+    color:#fff;
+    border:none;
+    padding:11px 20px;
+    border-radius:9px;
+    cursor:pointer;
+  }
+  button.primary:hover{filter:brightness(1.1);}
+  button.primary:disabled{opacity:.45;cursor:not-allowed;}
+  button.secondary{
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:0.85rem;
+    background:transparent;
+    color:var(--ink);
+    border:1px solid var(--border);
+    padding:9px 16px;
+    border-radius:9px;
+    cursor:pointer;
+  }
+  button.secondary:hover{background:var(--surface-2);}
+  button:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+  .action-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px;}
+  .log{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--ink-dim);
+    margin-top:10px;
+    white-space:pre-wrap;
+    line-height:1.5;
+  }
+
+  .banner{
+    background:var(--accent-soft);
+    color:var(--accent-ink);
+    border-radius:9px;
+    padding:9px 14px;
+    font-size:0.82rem;
+    font-weight:500;
+    margin-bottom:14px;
+  }
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:10px;
+    margin-bottom:16px;
+  }
+  @media (max-width:640px){ .stats{grid-template-columns:1fr 1fr;} }
+  .stat{
+    background:var(--surface-2);
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .stat .n{
+    font-family:var(--font-mono);
+    font-size:1.3rem;
+    font-weight:500;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat .l{font-size:0.72rem;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+  .stat.matched .n{color:var(--good);}
+  .stat.unmatched .n{color:var(--warn);}
+
+  .table-wrap{
+    overflow-x:auto;
+    border:1px solid var(--border);
+    border-radius:10px;
+  }
+  table{border-collapse:collapse;width:100%;font-size:0.82rem;}
+  thead th{
+    position:sticky;top:0;
+    background:var(--surface-2);
+    text-align:left;
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    color:var(--ink-dim);
+    padding:9px 10px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+    white-space:nowrap;
+    font-family:var(--font-mono);
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  td.reference{
+    white-space:normal;
+    max-width:260px;
+    font-family:var(--font-body);
+    color:var(--ink-dim);
+    font-size:0.78rem;
+  }
+  td.amount{font-variant-numeric:tabular-nums;text-align:right;}
+  td[contenteditable="true"]{
+    background:var(--accent-soft);
+    border-radius:5px;
+    cursor:text;
+  }
+  td[contenteditable="true"]:focus{outline:2px solid var(--focus);outline-offset:-1px;}
+
+  .badge{
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:99px;
+    font-size:0.7rem;
+    font-weight:600;
+    font-family:var(--font-body);
+    white-space:nowrap;
+  }
+  .badge.matched{background:var(--good-bg);color:var(--good);}
+  .badge.no-invoice{background:var(--warn-bg);color:var(--warn);}
+  .badge.no-folio{background:var(--bad-bg);color:var(--bad);}
+
+  .mapping-table{width:100%;border-collapse:collapse;font-size:0.85rem;}
+  .mapping-table th{
+    text-align:left;font-size:0.7rem;text-transform:uppercase;letter-spacing:.03em;
+    color:var(--ink-dim);padding:6px 8px;border-bottom:1px solid var(--border);
+  }
+  .mapping-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .mapping-table tr:last-child td{border-bottom:none;}
+  .mapping-table input{
+    width:100%;font-family:var(--font-mono);font-size:0.85rem;
+    padding:6px 8px;border-radius:6px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink);
+  }
+  .mapping-table .count{font-family:var(--font-mono);color:var(--ink-dim);font-size:0.8rem;}
+  .mapping-empty{color:var(--ink-dim);font-size:0.85rem;padding:8px 0;}
+
+  footer{color:var(--ink-dim);font-size:0.78rem;text-align:center;margin-top:8px;}
+  a{color:var(--focus);}
+  @media (prefers-color-scheme: dark){ a{color:var(--accent);} }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Ledger Bridge</h1>
+    <p>Turns eZee ABS Daily Receipt exports into AutoCount's <strong>Import AR Payment</strong> row format — matching each receipt to its Folio and Invoice number from the Transaction Detail Report, so payments knock off against the right invoice.</p>
+    <span class="privacy">● All parsing happens in your browser — files are never uploaded anywhere</span>
+  </header>
+
+  <section class="card">
+    <h2><span class="step-label">1</span>Upload your reports</h2>
+    <p class="hint">Both are exports from eZee ABS, as .xlsx.</p>
+    <div class="upload-grid">
+      <div class="dropzone" id="dz-receipt">
+        <label class="title" for="file-receipt">Daily Receipt report</label>
+        <div class="file-hint">Date · Receipt · Reference · Amount, grouped by Payment Mode</div>
+        <input type="file" id="file-receipt" accept=".xlsx,.xls">
+        <div class="file-status" id="status-receipt">No file loaded</div>
+      </div>
+      <div class="dropzone" id="dz-txn">
+        <label class="title" for="file-txn">Transaction Detail Report</label>
+        <div class="file-hint">Folio # · Invoice # · Settlement/Particular</div>
+        <input type="file" id="file-txn" accept=".xlsx,.xls">
+        <div class="file-status" id="status-txn">No file loaded</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="step-label">2</span>Defaults for this batch</h2>
+    <p class="hint">Real debtor codes aren't in the eZee exports yet. Each City Ledger account detected in the Transaction Detail Report (Agoda, corporate accounts, etc.) gets its own placeholder below — receipts that can't be tied to a ledger account fall back to the general placeholder here.</p>
+    <div class="settings-row">
+      <div class="field">
+        <label for="in-debtor">Fallback debtor code</label>
+        <input type="text" id="in-debtor" value="TBD-DEBTOR">
+        <div class="note">Used when no City Ledger account is detected for a receipt</div>
+      </div>
+      <div class="field">
+        <label for="in-currency">Currency code</label>
+        <input type="text" id="in-currency" value="MYR">
+      </div>
+      <div class="field">
+        <label for="in-rate">Exchange rate</label>
+        <input type="text" id="in-rate" value="1.000000">
+        <div class="note">Used for ToHomeRate / ToDebtorRate</div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="primary" id="btn-process" disabled>Process files</button>
+      <button class="secondary" id="btn-reset">Reset</button>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section class="card" id="mapping-card">
+    <h2><span class="step-label">3</span>Debtor code mapping</h2>
+    <p class="hint">One row per City Ledger account found in the Transaction Detail Report. Set the real AutoCount debtor code for each, then apply it to the table below.</p>
+    <div id="mapping-body"></div>
+    <div class="action-row">
+      <button class="secondary" id="btn-apply-mapping">Apply mapping to table</button>
+    </div>
+  </section>
+
+  <section class="card" id="payment-mapping-card">
+    <h2><span class="step-label">4</span>Payment method mapping</h2>
+    <p class="hint">One row per Payment Mode found in the Daily Receipt report. Set the real AutoCount payment method code for each (Bank/Cash are pre-filled from a sample AutoCount interface config — verify against yours), then apply it to the table below.</p>
+    <div id="payment-mapping-body"></div>
+    <div class="action-row">
+      <button class="secondary" id="btn-apply-payment-mapping">Apply mapping to table</button>
+    </div>
+  </section>
+
+  <section class="card" id="results">
+    <h2><span class="step-label">5</span>Review &amp; export</h2>
+    <p class="hint">Yellow cells are editable — fix DocNo, debtor codes, or invoice numbers directly, then export. Re-applying the mapping above overwrites any debtor codes you've hand-edited here.</p>
+    <div class="banner" id="sample-banner">Showing example rows so you can see the output shape. Upload your two reports above and click <strong>Process files</strong> to replace this with your real data.</div>
+
+    <div class="stats">
+      <div class="stat"><div class="n" id="stat-total">–</div><div class="l">Receipts</div></div>
+      <div class="stat"><div class="n" id="stat-amount">–</div><div class="l">Total amount</div></div>
+      <div class="stat matched"><div class="n" id="stat-matched">–</div><div class="l">Matched to invoice</div></div>
+      <div class="stat unmatched"><div class="n" id="stat-unmatched">–</div><div class="l">Needs review</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>DocNo (Folio)</th>
+            <th>Date</th>
+            <th>Method</th>
+            <th>AutoCount code</th>
+            <th>Receipt</th>
+            <th>Amount</th>
+            <th>Ledger account</th>
+            <th>Debtor code</th>
+            <th>Invoice # (knock-off)</th>
+            <th>Status</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="action-row">
+      <button class="primary" id="btn-download" disabled>Download Import AR Payment.xlsx</button>
+    </div>
+  </section>
+
+  <footer>Rebuilds the exact AutoCount template — merged group headers, bold mandate fields, real dates and numbers — as .xlsx. DocNo is the eZee Folio Number where one was found, otherwise &lt;&lt;New&gt;&gt;. PaymentMethod is exported as the mapped AutoCount code, not the raw eZee label.</footer>
+</main>
+
+<script>
+(function(){
+  var state = { rows: [], isSample: true, receiptFile: null, txnFile: null, debtorMap: {}, paymentMap: {} };
+
+  var NO_ACCOUNT_KEY = '(no ledger account detected)';
+
+  // Seed suggestions from a real AutoCount interface config's [PAY_TYPE1] section
+  // (BANK -> 310-1000, CASH -> 320-0000). Verify against your own property's codes.
+  function suggestPaymentCode(mode){
+    var m = String(mode || '').toLowerCase();
+    if(m.indexOf('bank') !== -1) return '310-1000';
+    if(m.indexOf('cash') !== -1) return '320-0000';
+    return 'TBD-PAY';
+  }
+
+  var PAYMENT_METHOD_STOPLIST = ['cash','visa card','master card','mastercard','bank transfer','cheque','check',
+    'debit card','credit card','grabpay','touch n go','tng','e-wallet','ewallet','qr pay','duitnow',
+    'online payment','paypal','stripe','amex','american express','unionpay','alipay','wechat pay'];
+
+  var SAMPLE_RECEIPTS = [
+    { date:'01-01-2026', mode:'Bank Transfer', receiptNo:'10', amount:176.4, folioNo:'398', reference:'Front Desk Folio : 398, Room : 303, Guest : Mr*** RA*** DE*** A/*** VI***' },
+    { date:'03-01-2026', mode:'Bank Transfer', receiptNo:'22', amount:88.2, folioNo:'398', reference:'Front Desk Folio : 398, Room : 303, Guest : Mr*** RA*** DE*** A/*** VI***' },
+    { date:'01-01-2026', mode:'Cash', receiptNo:'1', amount:98, folioNo:'382', reference:'Front Desk Folio : 382, Room : 207, Guest : LE*** WA*** SE***' },
+    { date:'02-01-2026', mode:'Cash', receiptNo:'15', amount:98, folioNo:'6', reference:'Front Desk Folio : 6, Room : 201, Guest : Mr*** FO*** FO*** KH***' },
+    { date:'06-01-2026', mode:'Cash', receiptNo:'54', amount:84.91, folioNo:'', reference:'Front Desk Folio : 367, Room : 211, Guest : Mi*** Ra***' }
+  ];
+  var SAMPLE_FOLIO_TO_INVOICE = { '398':'38', '6':'40' };
+  var SAMPLE_FOLIO_TO_ACCOUNT = { '398':'Agoda City Ledger', '6':'Booking.com City Ledger' };
+
+  function log(msg){
+    var el = document.getElementById('log');
+    el.textContent += (el.textContent ? '\n' : '') + msg;
+  }
+  function resetLog(){ document.getElementById('log').textContent=''; }
+
+  function updateProcessButton(){
+    document.getElementById('btn-process').disabled = !(state.receiptFile && state.txnFile);
+  }
+
+  document.getElementById('file-receipt').addEventListener('change', function(e){
+    state.receiptFile = e.target.files[0] || null;
+    var dz = document.getElementById('dz-receipt');
+    var st = document.getElementById('status-receipt');
+    if(state.receiptFile){
+      dz.classList.add('has-file');
+      st.textContent = state.receiptFile.name;
+      st.classList.add('ok');
+    } else {
+      dz.classList.remove('has-file');
+      st.textContent = 'No file loaded';
+      st.classList.remove('ok');
+    }
+    updateProcessButton();
+  });
+
+  document.getElementById('file-txn').addEventListener('change', function(e){
+    state.txnFile = e.target.files[0] || null;
+    var dz = document.getElementById('dz-txn');
+    var st = document.getElementById('status-txn');
+    if(state.txnFile){
+      dz.classList.add('has-file');
+      st.textContent = state.txnFile.name;
+      st.classList.add('ok');
+    } else {
+      dz.classList.remove('has-file');
+      st.textContent = 'No file loaded';
+      st.classList.remove('ok');
+    }
+    updateProcessButton();
+  });
+
+  function readWorkbook(file){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(e){
+        try{
+          var data = new Uint8Array(e.target.result);
+          var wb = XLSX.read(data, {type:'array'});
+          resolve(wb);
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = function(){ reject(new Error('Could not read ' + file.name)); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function cleanModeLabel(raw){
+    return String(raw || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+  }
+
+  function parseReceipts(wb){
+    var sheet = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+    var out = [];
+    var currentMode = '';
+    for(var i=1; i<rows.length; i++){
+      var r = rows[i];
+      var c0 = String(r[0] || '').trim();
+      var c1 = String(r[1] || '').trim();
+      var c2 = String(r[2] || '').trim();
+      if(c0 === 'Payment Mode'){ currentMode = cleanModeLabel(r[1]); continue; }
+      if(c2 === 'Total') continue;
+      if(!c0 && !c1 && !c2) continue;
+      if(!/^\d{1,2}-\d{1,2}-\d{4}$/.test(c0)) continue;
+      var folioMatch = c2.match(/Folio\s*:\s*(\d+)/i);
+      out.push({
+        date: c0,
+        mode: currentMode,
+        receiptNo: c1,
+        reference: c2,
+        amount: parseFloat(r[3]) || 0,
+        folioNo: folioMatch ? folioMatch[1] : ''
+      });
+    }
+    return out;
+  }
+
+  function normalizeParticular(v){
+    return String(v || '').trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
+  }
+
+  function parseTxnDetail(wb){
+    var sheet = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+    var header = rows[0].map(function(h){ return String(h || '').trim(); });
+    var folioIdx = header.indexOf('Folio #');
+    var invoiceIdx = header.indexOf('Invoice #');
+    var chargeIdx = header.indexOf('Charge');
+    var particularIdx = header.indexOf('Settlement/Particular');
+    var invoiceMap = {};
+    var accountMap = {};
+    if(folioIdx === -1 || invoiceIdx === -1){
+      log('Warning: could not find "Folio #" / "Invoice #" columns in Transaction Detail Report.');
+      return { invoiceMap: invoiceMap, accountMap: accountMap };
+    }
+    for(var i=1; i<rows.length; i++){
+      var r = rows[i];
+      var folio = String(r[folioIdx] || '').trim();
+      var invoice = String(r[invoiceIdx] || '').trim();
+      if(!folio) continue;
+      if(invoice && !invoiceMap[folio]) invoiceMap[folio] = invoice;
+
+      if(chargeIdx !== -1 && particularIdx !== -1 && !accountMap[folio]){
+        var charge = String(r[chargeIdx] || '').trim();
+        var particular = String(r[particularIdx] || '').trim();
+        if(charge === 'N/A' && particular && PAYMENT_METHOD_STOPLIST.indexOf(normalizeParticular(particular)) === -1){
+          accountMap[folio] = particular;
+        }
+      }
+    }
+    return { invoiceMap: invoiceMap, accountMap: accountMap };
+  }
+
+  function buildRows(receipts, folioToInvoice, folioToAccount){
+    return receipts.map(function(r){
+      var invoiceNo = r.folioNo && folioToInvoice[r.folioNo] ? folioToInvoice[r.folioNo] : '';
+      var accountName = r.folioNo && folioToAccount[r.folioNo] ? folioToAccount[r.folioNo] : '';
+      var status = !r.folioNo ? 'no-folio' : (invoiceNo ? 'matched' : 'no-invoice');
+      return {
+        docNo: r.folioNo || '<<New>>',
+        date: r.date, mode: r.mode, receiptNo: r.receiptNo, amount: r.amount,
+        folioNo: r.folioNo, reference: r.reference,
+        invoiceNo: invoiceNo, accountName: accountName, debtorCode: '', paymentCode: '', status: status
+      };
+    });
+  }
+
+  function suggestCode(accountName, fallback){
+    if(accountName === NO_ACCOUNT_KEY) return fallback;
+    var slug = accountName.replace(/[^A-Za-z0-9]+/g, '').toUpperCase().slice(0, 10);
+    return 'TBD-' + (slug || 'ACCT');
+  }
+
+  function renderMapping(){
+    var counts = {};
+    state.rows.forEach(function(r){
+      var key = r.accountName || NO_ACCOUNT_KEY;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    var keys = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; });
+    var body = document.getElementById('mapping-body');
+    if(keys.length === 0){
+      body.innerHTML = '<div class="mapping-empty">Process files to detect City Ledger accounts here.</div>';
+      return;
+    }
+    var fallback = document.getElementById('in-debtor').value.trim() || 'TBD-DEBTOR';
+    var rowsHtml = keys.map(function(key){
+      if(!(key in state.debtorMap)) state.debtorMap[key] = suggestCode(key, fallback);
+      var label = key === NO_ACCOUNT_KEY ? 'No ledger account detected' : escapeHtml(key);
+      return '<tr>' +
+        '<td>' + label + '</td>' +
+        '<td class="count">' + counts[key] + ' receipt' + (counts[key] === 1 ? '' : 's') + '</td>' +
+        '<td><input type="text" data-account="' + escapeHtml(key) + '" value="' + escapeHtml(state.debtorMap[key]) + '"></td>' +
+        '</tr>';
+    }).join('');
+    body.innerHTML = '<table class="mapping-table"><thead><tr><th>Ledger account</th><th>Receipts</th><th>AutoCount debtor code</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+    body.querySelectorAll('input[data-account]').forEach(function(input){
+      input.addEventListener('input', function(){
+        state.debtorMap[input.getAttribute('data-account')] = input.value.trim();
+      });
+    });
+  }
+
+  function applyMapping(){
+    var fallback = document.getElementById('in-debtor').value.trim() || 'TBD-DEBTOR';
+    state.rows.forEach(function(r){
+      var key = r.accountName || NO_ACCOUNT_KEY;
+      r.debtorCode = state.debtorMap[key] || suggestCode(key, fallback);
+    });
+    render();
+  }
+
+  function renderPaymentMapping(){
+    var counts = {};
+    state.rows.forEach(function(r){
+      var key = r.mode || '(blank)';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    var keys = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; });
+    var body = document.getElementById('payment-mapping-body');
+    if(keys.length === 0){
+      body.innerHTML = '<div class="mapping-empty">Process files to detect Payment Modes here.</div>';
+      return;
+    }
+    var rowsHtml = keys.map(function(key){
+      if(!(key in state.paymentMap)) state.paymentMap[key] = suggestPaymentCode(key);
+      return '<tr>' +
+        '<td>' + escapeHtml(key) + '</td>' +
+        '<td class="count">' + counts[key] + ' receipt' + (counts[key] === 1 ? '' : 's') + '</td>' +
+        '<td><input type="text" data-mode="' + escapeHtml(key) + '" value="' + escapeHtml(state.paymentMap[key]) + '"></td>' +
+        '</tr>';
+    }).join('');
+    body.innerHTML = '<table class="mapping-table"><thead><tr><th>Payment Mode</th><th>Receipts</th><th>AutoCount payment code</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+    body.querySelectorAll('input[data-mode]').forEach(function(input){
+      input.addEventListener('input', function(){
+        state.paymentMap[input.getAttribute('data-mode')] = input.value.trim();
+      });
+    });
+  }
+
+  function applyPaymentMapping(){
+    state.rows.forEach(function(r){
+      var key = r.mode || '(blank)';
+      r.paymentCode = state.paymentMap[key] || suggestPaymentCode(key);
+    });
+    render();
+  }
+
+  function statusLabel(s){
+    if(s === 'matched') return 'Matched';
+    if(s === 'no-invoice') return 'No invoice found';
+    return 'No folio ref';
+  }
+
+  function render(){
+    var tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    var total = 0, amountSum = 0, matched = 0;
+    state.rows.forEach(function(row, idx){
+      total++;
+      amountSum += row.amount;
+      if(row.status === 'matched') matched++;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td contenteditable="true" data-idx="' + idx + '" data-field="docNo">' + escapeHtml(row.docNo) + '</td>' +
+        '<td>' + row.date.replace(/-/g,'/') + '</td>' +
+        '<td>' + escapeHtml(row.mode) + '</td>' +
+        '<td contenteditable="true" data-idx="' + idx + '" data-field="paymentCode">' + escapeHtml(row.paymentCode) + '</td>' +
+        '<td>' + escapeHtml(row.receiptNo) + '</td>' +
+        '<td class="amount">' + row.amount.toFixed(2) + '</td>' +
+        '<td>' + (row.accountName ? escapeHtml(row.accountName) : '<span class="badge no-folio">none</span>') + '</td>' +
+        '<td contenteditable="true" data-idx="' + idx + '" data-field="debtorCode">' + escapeHtml(row.debtorCode) + '</td>' +
+        '<td contenteditable="true" data-idx="' + idx + '" data-field="invoiceNo">' + escapeHtml(row.invoiceNo) + '</td>' +
+        '<td><span class="badge status-badge ' + row.status + '">' + statusLabel(row.status) + '</span></td>' +
+        '<td class="reference">' + escapeHtml(row.reference) + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-amount').textContent = amountSum.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('stat-matched').textContent = matched;
+    document.getElementById('stat-unmatched').textContent = total - matched;
+
+    tbody.querySelectorAll('td[contenteditable="true"]').forEach(function(td){
+      td.addEventListener('input', function(){
+        var idx = parseInt(td.getAttribute('data-idx'), 10);
+        var field = td.getAttribute('data-field');
+        state.rows[idx][field] = td.textContent.trim();
+        if(field === 'invoiceNo'){
+          state.rows[idx].status = state.rows[idx].invoiceNo ? 'matched' : (state.rows[idx].folioNo ? 'no-invoice' : 'no-folio');
+          var badge = td.closest('tr').querySelector('.status-badge');
+          badge.className = 'badge status-badge ' + state.rows[idx].status;
+          badge.textContent = statusLabel(state.rows[idx].status);
+        }
+      });
+    });
+
+    document.getElementById('sample-banner').style.display = state.isSample ? '' : 'none';
+    document.getElementById('btn-download').disabled = state.isSample;
+  }
+
+  function escapeHtml(s){
+    return String(s || '').replace(/[&<>"]/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+    });
+  }
+
+  state.rows = buildRows(SAMPLE_RECEIPTS, SAMPLE_FOLIO_TO_INVOICE, SAMPLE_FOLIO_TO_ACCOUNT);
+  state.debtorMap = {};
+  state.paymentMap = {};
+  renderMapping();
+  applyMapping();
+  renderPaymentMapping();
+  applyPaymentMapping();
+
+  document.getElementById('btn-process').addEventListener('click', function(){
+    resetLog();
+    log('Reading ' + state.receiptFile.name + ' …');
+    log('Reading ' + state.txnFile.name + ' …');
+    Promise.all([readWorkbook(state.receiptFile), readWorkbook(state.txnFile)])
+      .then(function(results){
+        var receiptWb = results[0], txnWb = results[1];
+        var receipts = parseReceipts(receiptWb);
+        var txn = parseTxnDetail(txnWb);
+        state.rows = buildRows(receipts, txn.invoiceMap, txn.accountMap);
+        state.debtorMap = {};
+        state.paymentMap = {};
+        state.isSample = false;
+        var matched = state.rows.filter(function(r){ return r.status === 'matched'; }).length;
+        var withAccount = state.rows.filter(function(r){ return r.accountName; }).length;
+        log('Parsed ' + receipts.length + ' receipts.');
+        log('Matched ' + matched + ' to an invoice via Folio #.');
+        log(withAccount + ' tied to a City Ledger account — set their debtor codes below.');
+        log((receipts.length - matched) + ' need manual review — edit the highlighted cells below.');
+        renderMapping();
+        applyMapping();
+        renderPaymentMapping();
+        applyPaymentMapping();
+      })
+      .catch(function(err){
+        log('Error: ' + err.message);
+      });
+  });
+
+  document.getElementById('btn-apply-mapping').addEventListener('click', function(){
+    applyMapping();
+  });
+
+  document.getElementById('btn-apply-payment-mapping').addEventListener('click', function(){
+    applyPaymentMapping();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', function(){
+    state.rows = buildRows(SAMPLE_RECEIPTS, SAMPLE_FOLIO_TO_INVOICE, SAMPLE_FOLIO_TO_ACCOUNT);
+    state.debtorMap = {};
+    state.paymentMap = {};
+    state.isSample = true;
+    state.receiptFile = null;
+    state.txnFile = null;
+    document.getElementById('file-receipt').value = '';
+    document.getElementById('file-txn').value = '';
+    document.getElementById('status-receipt').textContent = 'No file loaded';
+    document.getElementById('status-receipt').classList.remove('ok');
+    document.getElementById('status-txn').textContent = 'No file loaded';
+    document.getElementById('status-txn').classList.remove('ok');
+    document.getElementById('dz-receipt').classList.remove('has-file');
+    document.getElementById('dz-txn').classList.remove('has-file');
+    updateProcessButton();
+    resetLog();
+    renderMapping();
+    applyMapping();
+    renderPaymentMapping();
+    applyPaymentMapping();
+  });
+
+  // Exact structure of AutoCount's "Import AR Payment" template, read directly off the source .xls.
+  var TEMPLATE = {
+    fieldNames: ['Bold column are mandate fields.','DocNo','DocDate','DebtorCode','Description','ProjNo','DeptNo','CurrencyCode','ToHomeRate','ToDebtorRate','Note','PaymentMethod','ChequeNo','PaymentAmt','BankCharge','ToBankRate','PaymentBy','FloatDay','IsRCHQ','RCHQDate','KnockOffDocType','KnockOffDocNo','KnockOffAmt'],
+    hints: ['','(20 chars)','(Date: dd/MM/yyyy)','(12 chars)','(40 chars)','(10 chars)','(10 chars)','(5 chars)','(Number, use System Currency Rate Decimal)','(Number, use System Currency Rate Decimal)','(Rich Text)','(20 chars)','(20 chars)','(Number, use System Currency Decimal)','(Number, use System Currency Decimal)','(Number, use System Currency Rate Decimal)','(20 chars)','(Integer)','(Boolean. Indicate T for stock control or F for non stock control)','(Returned Cheque Date: dd/MM/yyyy)','(2 chars, RI for Invoice, RD for D/N)','(20 chars)','(Number, use System Currency Decimal)'],
+    // 1-indexed column numbers (A=1) that are bold mandate fields on the field-name row
+    boldCols: [1,2,3,4,9,10,12,14], // A(instruction),DocNo,DocDate,DebtorCode,ToHomeRate,ToDebtorRate,PaymentMethod,PaymentAmt
+    // Excel column widths, measured from the source template (raw/256)
+    widths: [11.43,10.43,10.71,11.43,9.71,9.71,9.57,10.71,13.0,12.57,9.43,12.29,12.14,13.0,13.86,13.29,8.0,8.0,14.57,11.14,15.0,15.0,15.0],
+    fillMaster: 'FFFFCC99',
+    fillPayment: 'FF99CC00',
+    fillKnockoff: 'FFCCFFFF',
+    fillFieldRow: 'FFD4D0C8'
+  };
+
+  function parseDdMmYyyy(s){
+    var m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+    if(!m) return null;
+    return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+  }
+
+  function buildWorkbook(rows, currency, rate){
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('AR Payment');
+    ws.columns = TEMPLATE.widths.map(function(w){ return {width:w}; });
+
+    function fillRange(fromCol, toCol, rowNum, argb){
+      for(var c=fromCol; c<=toCol; c++){
+        ws.getCell(rowNum, c).fill = {type:'pattern', pattern:'solid', fgColor:{argb:argb}};
+      }
+    }
+
+    // Row 1 — merged group headers
+    ws.mergeCells(1,2,1,11);  ws.getCell(1,2).value = 'Master Column';
+    ws.mergeCells(1,12,1,20); ws.getCell(1,12).value = 'Payment Detail Column';
+    ws.mergeCells(1,21,1,23); ws.getCell(1,21).value = 'Knock Off Detail';
+    fillRange(2,11,1,TEMPLATE.fillMaster);
+    fillRange(12,20,1,TEMPLATE.fillPayment);
+    fillRange(21,23,1,TEMPLATE.fillKnockoff);
+
+    // Row 2 — format hints
+    TEMPLATE.hints.forEach(function(h, i){ ws.getCell(2, i+1).value = h; ws.getCell(2, i+1).font = {italic:true, size:9}; });
+
+    // Row 3 — field names
+    TEMPLATE.fieldNames.forEach(function(name, i){
+      var cell = ws.getCell(3, i+1);
+      cell.value = name;
+      if(i >= 1) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:TEMPLATE.fillFieldRow}};
+    });
+    TEMPLATE.boldCols.forEach(function(col){ ws.getCell(3, col).font = {bold:true}; });
+
+    // Data rows from row 4
+    rows.forEach(function(row, idx){
+      var r = 4 + idx;
+      var hasKnockoff = !!row.invoiceNo;
+      var dt = parseDdMmYyyy(row.date);
+      ws.getCell(r,1).value = '';
+      ws.getCell(r,2).value = row.docNo || '<<New>>';
+      var dateCell = ws.getCell(r,3); dateCell.value = dt; dateCell.numFmt = 'dd/mm/yyyy';
+      ws.getCell(r,4).value = row.debtorCode;
+      ws.getCell(r,5).value = 'Front Desk Receipt ' + row.receiptNo;
+      ws.getCell(r,6).value = '';
+      ws.getCell(r,7).value = '';
+      ws.getCell(r,8).value = currency;
+      ws.getCell(r,9).value = parseFloat(rate) || 1;
+      ws.getCell(r,10).value = parseFloat(rate) || 1;
+      ws.getCell(r,11).value = row.reference;
+      ws.getCell(r,12).value = row.paymentCode || row.mode;
+      ws.getCell(r,13).value = String(row.receiptNo);
+      ws.getCell(r,14).value = Math.round(row.amount * 100) / 100;
+      ws.getCell(r,15).value = '';
+      ws.getCell(r,16).value = '';
+      ws.getCell(r,17).value = '';
+      ws.getCell(r,18).value = '';
+      ws.getCell(r,19).value = '';
+      ws.getCell(r,20).value = '';
+      ws.getCell(r,21).value = hasKnockoff ? 'RI' : '';
+      ws.getCell(r,22).value = row.invoiceNo;
+      ws.getCell(r,23).value = hasKnockoff ? Math.round(row.amount * 100) / 100 : '';
+    });
+
+    return wb;
+  }
+
+  document.getElementById('btn-download').addEventListener('click', function(){
+    var currency = document.getElementById('in-currency').value.trim() || 'MYR';
+    var rate = document.getElementById('in-rate').value.trim() || '1.000000';
+    var wb = buildWorkbook(state.rows, currency, rate);
+
+    wb.xlsx.writeBuffer().then(function(buffer){
+      var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'Import AR Payment.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      log('Saved Import AR Payment.xlsx');
+    }).catch(function(err){
+      log('Error building workbook: ' + err.message);
+    });
+  });
+})();
+</script>
+</body>
+</html>
